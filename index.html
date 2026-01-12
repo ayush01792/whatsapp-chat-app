@@ -30,6 +30,7 @@
       padding: 8px 12px;
       border-radius: 10px;
       max-width: 70%;
+      font-size: 14px;
     }
     .sent {
       background: #dcf8c6;
@@ -70,11 +71,22 @@
 
 <script src="/socket.io.js"></script>
 <script>
-  const socket = io("http://localhost:5001");
+  // ✅ Connect to deployed backend
+  const socket = io("https://whatsapp-chat-app-lqb8.onrender.com");
 
-  // ask user details
-  const username = prompt("Enter your name:");
-  const roomId = prompt("Enter room ID (same for both users):");
+  // ✅ Get username (stored for refresh)
+  let username = localStorage.getItem("username");
+  if (!username) {
+    username = prompt("Enter your name:");
+    localStorage.setItem("username", username);
+  }
+
+  // ✅ Get room
+  let roomId = localStorage.getItem("roomId");
+  if (!roomId) {
+    roomId = prompt("Enter room ID (same for both users):");
+    localStorage.setItem("roomId", roomId);
+  }
 
   socket.emit("joinRoom", roomId);
 
@@ -88,26 +100,38 @@
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
   }
 
+  // ✅ Load old messages from MongoDB
+  socket.on("chatHistory", (messages) => {
+    messages.forEach((msg) => {
+      const type = msg.sender === username ? "sent" : "received";
+      addMessage(msg.sender + ": " + msg.text, type);
+    });
+  });
+
   function sendMessage() {
     const input = document.getElementById("msgInput");
     const message = input.value.trim();
     if (!message) return;
 
+    // Show instantly for sender
     addMessage("You: " + message, "sent");
 
     socket.emit("sendMessage", {
       roomId: roomId,
-      text: username + ": " + message
+      text: message,
+      sender: username
     });
 
     input.value = "";
   }
 
+  // ✅ Receive messages from others
   socket.on("receiveMessage", (data) => {
-    addMessage(data.text, "received");
+    addMessage(data.sender + ": " + data.text, "received");
   });
 </script>
 
 </body>
 </html>
+
 
