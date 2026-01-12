@@ -1,8 +1,15 @@
 const path = require("path");
+
+app.use(express.static(path.join(__dirname, "public")));
+
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
+const connectDB = require("./config/db");
+const Message = require("./models/Message");
+
+
 
 const app = express();
 app.use(cors());
@@ -14,9 +21,7 @@ app.get("/socket.io.js", (req, res) => {
   );
 });
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "../index.html"));
-});
+
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -24,24 +29,43 @@ const io = new Server(server, {
     origin: "*",
   },
 });
+connectDB(); 
+
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
-  socket.on("joinRoom", (roomId) => {
+ socket.on("joinRoom", async (roomId) => {
   socket.join(roomId);
   console.log(`User ${socket.id} joined room ${roomId}`);
+
+  const messages = await Message.find({ roomId })
+    .sort({ createdAt: 1 })
+    .limit(50);
+
+  socket.emit("chatHistory", messages);
 });
 
-socket.on("sendMessage", (data) => {
-  const { roomId, text } = data;
-  console.log("Message:", text, "Room:", roomId);
 
+socket.on("sendMessage", async (data) => {
+  const { roomId, text, sender } = data;
+
+  // 🔥 Save message in MongoDB
+  const message = new Message({
+    roomId,
+    sender,
+    text,
+  });
+
+  await message.save();
+
+  // Send to others in room (not sender)
   socket.to(roomId).emit("receiveMessage", {
     text,
-    sender: socket.id,
+    sender,
   });
 });
+
 
 
   socket.on("disconnect", () => {
